@@ -1,18 +1,23 @@
 /* ============================================================
-   FILM PORTFOLIO · app.js
-   数据驱动渲染 · tvOS 视差倾斜 · 滚动叙事图表 · 丝滑弹窗
-   纯原生 JS，无任何依赖，GitHub Pages 可直接部署
+   FILM PORTFOLIO · app.js（ES Module）
+   ------------------------------------------------------------
+   数据驱动渲染 · Atropos 3D 视差倾斜 · PhotoSwipe 海报灯箱
+   vanilla-lazyload 海报懒加载
+   纯静态，无构建步骤，GitHub Pages 子路径（/portfolio/）可直接部署
    ============================================================ */
-'use strict';
+import PhotoSwipe from './vendor/photoswipe/photoswipe.esm.min.js';
 
 /* ---------- 环境探测 ---------- */
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const COARSE = window.matchMedia('(pointer: coarse)').matches;
-const DIALOG_NATIVE = typeof HTMLDialogElement !== 'undefined';
 
 /* GitHub Pages 项目页运行于子路径（/portfolio/）：资源一律相对解析 */
 const BASE = new URL('./', document.baseURI);
 const resolve = (p) => BASE.href.replace(/\/$/, '') + '/' + p.replace(/^\.?\//, '');
+
+/* 1×1 透明占位图：懒加载完成前撑住布局，避免 CLS */
+const PLACEHOLDER =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 /* ---------- 站点信息（可编辑） ---------- */
 const SITE = {
@@ -29,7 +34,9 @@ const SITE = {
   emailLabel: 'vigourfilm@163.com',
 };
 
-/* ---------- 电影库（可编辑；poster 留空则自动生成渐变海报） ---------- */
+/* ---------- 电影库（可编辑）
+   poster 留空则自动生成渐变海报；
+   posterW / posterH 为海报原始像素尺寸（PhotoSwipe 计算缩放用） ---------- */
 const FILMS = [
   {
     id: 'aurora',
@@ -44,6 +51,8 @@ const FILMS = [
     cast: ['周屿', '艾拉', '陈默'],
     festivals: ['克莱蒙费朗国际短片节', '上海国际电影节短片单元'],
     poster: './assets/img/film-02.png',
+    posterW: 1912,
+    posterH: 1073,
     still: '',
     videoUrl: '#',
   },
@@ -60,6 +69,8 @@ const FILMS = [
     cast: ['老周', '小雨'],
     festivals: ['FIRST 青年电影展', '北京国际短片联展'],
     poster: './assets/img/film-03.png',
+    posterW: 1914,
+    posterH: 1069,
     still: '',
     videoUrl: '#',
   },
@@ -72,6 +83,12 @@ const $ = (sel, ctx = document) => ctx.querySelector(sel);
 const $$ = (sel, ctx = document) => Array.from(ctx.querySelectorAll(sel));
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c =>
   ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+/* 海报原始尺寸（未填 posterW/H 时用生成海报的默认画幅） */
+function posterSize(f) {
+  if (f.posterW && f.posterH) return { w: f.posterW, h: f.posterH };
+  return { w: 600, h: 900 };
+}
 
 /* 自动生成渐变海报（poster 留空时）——深黑底 + 极光渐变 + 片名 */
 function genPoster(f, w = 600, h = 900) {
@@ -97,26 +114,33 @@ function genPoster(f, w = 600, h = 900) {
 }
 
 /* ============================================================
-   渲染：电影卡（海报 + 元数据）
+   渲染：电影卡（Atropos 结构：scale / rotate / inner）
    ============================================================ */
 function filmCardHTML(f, i) {
-  // 布局：横版海报卡均等宽并排（各 span 6）
-  const span = 'film-card--wide';
-  const img = f.poster ? resolve(f.poster) : genPoster(f);
+  const src = f.poster ? resolve(f.poster) : genPoster(f);
+  const { w, h } = posterSize(f);
   const still = f.still
     ? `<img class="film-card__still" src="${resolve(f.still)}" alt="" loading="lazy" decoding="async" aria-hidden="true">`
     : '';
   return `
-    <button class="card glass film-card ${span}" data-tilt data-reveal data-film="${f.id}"
-            aria-label="查看《${esc(f.title)}》海报大图" style="transition-delay:${Math.min(i * 70, 280)}ms">
-      <span class="film-card__media">
-        <img class="film-card__poster" src="${img}" alt="《${esc(f.title)}》海报" loading="lazy" decoding="async">
-        ${still}
-        <span class="film-card__hover-title" aria-hidden="true">${esc(f.title)}</span>
-      </span>
+    <div class="card glass film-card film-card--wide atropos" role="button" tabindex="0"
+         data-atropos data-reveal data-film="${f.id}"
+         aria-label="查看《${esc(f.title)}》海报大图"
+         style="transition-delay:${Math.min(i * 70, 280)}ms">
+      <div class="atropos-scale">
+        <div class="atropos-rotate">
+          <div class="atropos-inner">
+            <span class="film-card__media">
+              <img class="film-card__poster" src="${PLACEHOLDER}" data-src="${src}"
+                   width="${w}" height="${h}" alt="《${esc(f.title)}》海报" decoding="async">
+              ${still}
+              <span class="film-card__hover-title" aria-hidden="true">${esc(f.title)}</span>
+            </span>
+          </div>
+        </div>
+      </div>
       <span class="sheen" aria-hidden="true"></span>
-      <span class="glare" aria-hidden="true"></span>
-    </button>`;
+    </div>`;
 }
 
 function renderFilms() {
@@ -124,10 +148,6 @@ function renderFilms() {
   // 所有短片海报全部展示
   grid.innerHTML = FILMS.map((f, i) => filmCardHTML(f, i)).join('');
 }
-
-/* ============================================================
-   （导演介绍改为静态标题 + 图片，见 index.html 关于区）
-   ============================================================ */
 
 function renderContact() {
   const slot = $('#contact-slot');
@@ -138,58 +158,113 @@ function renderContact() {
 }
 
 /* ============================================================
-   tvOS 视差倾斜（rAF + lerp，coarse 指针 / 减动效时禁用）
+   视差倾斜：Atropos（鼠标 hover 倾斜；触屏横向滑动；减动效时跳过）
    ============================================================ */
 const Tilt = (() => {
-  let raf = null;
-  const cards = [];
+  function init() {
+    if (REDUCED || typeof window.Atropos === 'undefined') return;
+    $$('[data-atropos]').forEach((el) => {
+      if (el.__atropos__) return;
+      new window.Atropos({
+        el,
+        rotateXMax: 5,          // 与原先自写 tilt 的 ±5° 一致
+        rotateYMax: 5,
+        rotateTouch: COARSE ? 'scroll-y' : true,
+        duration: 300,
+        shadow: false,
+        highlight: true,
+        activeOffset: 40,
+      });
+    });
+  }
+  return { init };
+})();
 
-  function lerp(a, b, t) { return a + (b - a) * t; }
+/* ============================================================
+   懒加载：vanilla-lazyload（data-src → src，加载完成淡入）
+   ============================================================ */
+const Lazy = (() => {
+  function loadAllNow() {
+    $$('img[data-src]').forEach((img) => {
+      img.src = img.dataset.src;
+      img.removeAttribute('data-src');
+      img.classList.add('is-loaded');
+    });
+  }
 
-  function tick() {
-    raf = requestAnimationFrame(tick);
-    for (const c of cards) {
-      if (!c.behind || c.hidden) continue;
-      // 阻尼接近目标 → 平滑停留
-      c.cur.rx = lerp(c.cur.rx, c.target.rx, 0.14);
-      c.cur.ry = lerp(c.cur.ry, c.target.ry, 0.14);
-      c.cur.s  = lerp(c.cur.s,  c.target.s,  0.14);
-      const done = Math.abs(c.cur.rx - c.target.rx) < 0.02
-        && Math.abs(c.cur.ry - c.target.ry) < 0.02
-        && Math.abs(c.cur.s - c.target.s) < 0.005;
-      c.el.style.transform =
-        `perspective(1000px) rotateX(${c.cur.rx.toFixed(2)}deg) rotateY(${c.cur.ry.toFixed(2)}deg) scale(${c.cur.s.toFixed(4)})`;
-      if (done && c.idle) {
-        c.behind = false;
-        c.el.style.transform = '';
-      }
+  function init() {
+    const imgs = $$('img[data-src]');
+    if (!imgs.length) return;
+    if (typeof window.LazyLoad === 'undefined') return loadAllNow();
+    try {
+      new window.LazyLoad({
+        elements_selector: 'img[data-src]',
+        threshold: 300,
+        callback_loaded: (el) => el.classList.add('is-loaded'),
+        callback_error: (el) => el.classList.add('is-loaded'),
+      });
+    } catch (err) {
+      console.warn('[portfolio] LazyLoad 初始化失败，回退为直接加载', err);
+      loadAllNow();
     }
   }
+  return { init };
+})();
 
-  function bind(card) {
-    if (COARSE || REDUCED || !card) return;
-    const rec = { el: card, cur: { rx: 0, ry: 0, s: 1 }, target: { rx: 0, ry: 0, s: 1 }, behind: true, idle: true };
-    card.addEventListener('mousemove', (e) => {
-      const r = card.getBoundingClientRect();
-      const px = (e.clientX - r.left) / r.width  - 0.5;
-      const py = (e.clientY - r.top)  / r.height - 0.5;
-      rec.target.ry = px * 10;   // 水平甩头 ±5°
-      rec.target.rx = -py * 10;  // 垂直俯仰 ±5°
-      rec.target.s = 1.02;
-      rec.behind = true; rec.idle = false;
-      card.style.setProperty('--mx', (px + 0.5) * 100 + '%');
-      card.style.setProperty('--my', (py + 0.5) * 100 + '%');
+/* ============================================================
+   灯箱：PhotoSwipe 5（点击海报卡打开，从缩略图 zoom 展开）
+   ============================================================ */
+const Gallery = (() => {
+  function buildItems() {
+    return FILMS.map((f) => {
+      const { w, h } = posterSize(f);
+      return {
+        src: f.poster ? resolve(f.poster) : genPoster(f, w, h),
+        width: w,
+        height: h,
+        alt: `《${f.title}》海报`,
+        // 让 PhotoSwipe 从卡内缩略图位置 zoom 展开
+        element: $(`[data-film="${f.id}"] .film-card__poster`),
+      };
     });
-    card.addEventListener('mouseleave', () => {
-      rec.target.rx = 0; rec.target.ry = 0; rec.target.s = 1;
-      rec.idle = true;
-    });
-    cards.push(rec);
-    if (!raf && !REDUCED) raf = requestAnimationFrame(tick);
   }
 
-  function init() { $$('[data-tilt]').forEach(bind); }
-  return { init, bind };
+  function open(id) {
+    const index = FILMS.findIndex((f) => f.id === id);
+    if (index < 0) return;
+    const pswp = new PhotoSwipe({
+      dataSource: buildItems(),
+      index,
+      mainClass: 'pswp--portfolio',
+      showHideAnimationType: 'zoom',
+      bgOpacity: 0.94,
+      counter: false,     // 不显示「1 / 2」计数
+      zoom: false,        // 不显示缩放按钮（海报看图即可）
+      closeTitle: '关闭',
+      arrowPrevTitle: '上一张',
+      arrowNextTitle: '下一张',
+    });
+    pswp.init();
+  }
+
+  function init() {
+    const grid = $('#work-grid');
+    // 鼠标 / 触屏点击
+    grid.addEventListener('click', (e) => {
+      const card = e.target.closest('[data-film]');
+      if (card) open(card.dataset.film);
+    });
+    // 键盘 Enter / Space 激活（卡片是 role="button" 的 div）
+    grid.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      const card = e.target.closest('[data-film]');
+      if (!card) return;
+      e.preventDefault();
+      open(card.dataset.film);
+    });
+  }
+
+  return { init, open };
 })();
 
 /* ============================================================
@@ -212,126 +287,19 @@ const Reveal = (() => {
 })();
 
 /* ============================================================
-   丝滑展开：海报卡 → <dialog>（FLIP 缩放过渡）
-   ============================================================ */
-const Dialog = (() => {
-  const dlg = $('#film-dialog');
-  let openCard = null;
-  let closing = false;
-  let cur = 0; /* 当前展示的第几张海报 */
-
-  function render() {
-    const f = FILMS[cur];
-    dlg.innerHTML = buildInner(f);
-    const cb = $('.dialog-close');
-    if (cb) cb.focus({ preventScroll: true });
-  }
-
-  function show(dir) {
-    if (closing || !dlg.open) return;
-    cur = (cur + dir + FILMS.length) % FILMS.length;
-    render();
-  }
-
-  function open(id) {
-    const idx = FILMS.findIndex(x => x.id === id);
-    if (idx === -1 || DIALOG_NATIVE === false) return;
-    cur = idx;
-    const f = FILMS[idx];
-    openCard = $(`[data-film="${id}"]`);
-    dlg.innerHTML = buildInner(f);
-    if (!dlg.open) dlg.showModal();
-
-    // FLIP：以触发卡为源点缩放展开
-    const r = openCard ? openCard.getBoundingClientRect() : null;
-    const vw = innerWidth, vh = innerHeight;
-    const or = openCard.getBoundingClientRect();
-    const scaleX = r.width / Math.min(dlg.offsetWidth, vw - 48);
-    const scaleY = r.height / Math.min(dlg.offsetHeight, vh - 48);
-    const scale = Math.max(scaleX, scaleY);
-    setTimeout(() => {
-      if (!REDUCED && !closing) {
-        dlg.style.transform = `scale(${Math.min(scale, 1.6)}) translateY(${(or.top - (vh - dlg.offsetHeight) / 2) * .4}px)`;
-        dlg.animate([{ transform: dlg.style.transform, opacity: 0 }, { transform: 'none', opacity: 1 }], {
-          duration: 300, easing: 'cubic-bezier(.32,.72,0,1)'
-        });
-        dlg.style.transform = 'none';
-      }
-      const cb = $('.dialog-close');
-      if (cb) cb.focus({ preventScroll: true });
-    }, 20);
-  }
-
-  function close() {
-    if (!dlg.open || closing) return;
-    closing = true;
-    const done = () => {
-      dlg.close();
-      closing = false;
-      const c = openCard;
-      openCard = null;
-      if (c && c.focus) c.focus({ preventScroll: true });
-    };
-    if (REDUCED) return done();
-    dlg.animate([{ transform: 'none', opacity: 1 }, { transform: 'scale(.92) translateY(20px)', opacity: 0 }], {
-      duration: 220, easing: 'ease'
-    }).onfinish = done;
-  }
-
-  function buildInner(f) {
-    const poster = f.poster ? resolve(f.poster) : genPoster(f);
-    const multi = FILMS.length > 1;
-    return `
-      <button class="dialog-close" aria-label="关闭详情">✕</button>
-      ${multi ? `
-      <button class="dialog-nav dialog-nav--prev" aria-label="上一张海报">‹</button>
-      <button class="dialog-nav dialog-nav--next" aria-label="下一张海报">›</button>` : ''}
-      <div class="dialog-poster">
-        <img src="${poster}" alt="《${esc(f.title)}》海报" loading="eager" decoding="async">
-        <div class="dialog-poster__scrim"></div>
-      </div>`;
-  }
-
-  function init() {
-    if (DIALOG_NATIVE === false) return;
-    // 事件委托：所有电影卡点击打开
-    $('#work-grid').addEventListener('click', (e) => {
-      const card = e.target.closest('[data-film]');
-      if (card) open(card.dataset.film);
-    });
-    dlg.addEventListener('click', (e) => {
-      if (e.target.closest('.dialog-nav--prev')) show(-1);
-      else if (e.target.closest('.dialog-nav--next')) show(1);
-      else if (e.target.closest('.dialog-close')) close();
-    });
-    // 点击 backdrop 关闭
-    dlg.addEventListener('click', (e) => {
-      if (e.target === dlg) close();
-    });
-    // 键盘 ← → 切换海报
-    dlg.addEventListener('keydown', (e) => {
-      if (!dlg.open) return;
-      if (e.key === 'ArrowLeft') show(-1);
-      else if (e.key === 'ArrowRight') show(1);
-    });
-  }
-
-  return { init, open, close, show };
-})();
-
-/* ============================================================
    初始化
    ============================================================ */
 function init() {
-  $('#year').textContent = new Date().getFullYear();
+  const yearEl = $('#year');
+  if (yearEl) yearEl.textContent = new Date().getFullYear();
 
   renderFilms();
   renderContact();
 
-  // 初始化所有卡片为可倾斜，并启动滚动渐显
-  Tilt.init();
-  Reveal.scan();
-  Dialog.init();
+  Tilt.init();      // Atropos：卡片 3D 视差
+  Lazy.init();      // 海报懒加载
+  Reveal.scan();    // 滚动入场
+  Gallery.init();   // PhotoSwipe 灯箱
 }
 
 if (document.readyState === 'loading') {

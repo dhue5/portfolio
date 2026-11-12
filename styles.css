@@ -25,6 +25,7 @@
 
   /* 文字 */
   --ink: #f2f5f8;                /* 近白（非纯白，避免刺眼） */
+  --ink-hi: #ffffff;             /* 高亮白（hover 片名标签） */
   --ink-dim: rgba(242, 245, 248, 0.62);
   --ink-faint: rgba(242, 245, 248, 0.40);
 
@@ -264,22 +265,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
   -webkit-mask-composite: xor; mask-composite: exclude; padding: 1px;
 }
 
-/* 悬停眩光（tvOS 高光，--mx/--my 由 JS 驱动） */
-.glare {
-  position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
-  opacity: 0; transition: opacity .3s ease;
-  background: radial-gradient(360px circle at var(--mx,50%) var(--my,50%),
-              rgba(255,255,255,.16), transparent 45%);
-  mix-blend-mode: screen;
-}
-.card:hover .glare { opacity: 1; }
-
 /* ---------- 作品网格 ---------- */
 .work-grid { margin-top: 1rem; }
 .film-card {
   grid-column: span 4; grid-row: span 2;
   border-radius: var(--radius-md);
-  padding: 1rem; transform-style: preserve-3d;
+  padding: 1rem;
   display: flex; flex-direction: column;
   text-align: left;
   cursor: zoom-in;
@@ -292,15 +283,18 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .film-card__media {
   border-radius: var(--radius-sm); overflow: hidden;
   position: relative;
+  background: rgba(5, 6, 10, .55);  /* 懒加载期间先给深色底，避免白闪 */
 }
 .film-card--wide .film-card__media {
   flex: none;  /* 高度由海报图自身比例撑开，不强制裁切 */
 }
 .film-card__poster {
   display: block; width: 100%; height: auto;  /* 按每张海报原始比例自适应 */
-  transition: transform .55s var(--ease-out), filter .3s ease;
+  opacity: 0;  /* 懒加载完成后淡入（.is-loaded） */
+  transition: opacity .5s ease, transform .55s var(--ease-out), filter .3s ease;
   filter: saturate(.92) contrast(1.02);
 }
+.film-card__poster.is-loaded { opacity: 1; }
 .card:hover .film-card__poster { transform: scale(1.06); filter: saturate(1.06); }
 .film-card__still { position:absolute; inset:0; opacity:0; transition: opacity .35s ease; }
 .card:hover .film-card__still { opacity:1; }
@@ -319,7 +313,7 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 /* ---------- 关于：导演介绍（标题 + 导演肖像） ---------- */
 .about-media-wrap { max-width: 64rem; margin-inline:auto; }
-.about-media { border-radius: var(--radius-lg); padding:1rem; transform-style: preserve-3d; }
+.about-media { border-radius: var(--radius-lg); padding:1rem; }
 .about-media__frame { border-radius: var(--radius-sm); overflow:hidden; }
 .about-media__img { display:block; width:100%; height:auto; aspect-ratio:1517/858; object-fit:cover; transition: transform .6s var(--ease-out); }
 .card:hover .about-media__img { transform: scale(1.04); }
@@ -357,59 +351,45 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 }
 .footer__top:hover { opacity:1; transform: translateY(-3px); }
 
-/* ---------- 电影详情弹窗 ---------- */
-.film-dialog {
-  width: min(64rem, 94vw); max-height: 90vh;
-  margin: auto; border: none; border-radius: var(--radius-lg);
-  background: transparent; padding: 0; color: var(--ink);
-  overflow: hidden;
-  transform-origin: var(--fx, 50%) var(--fy, 50%);
-  transition: transform .35s var(--ease-out), opacity .3s ease;
+/* ---------- Atropos 3D 倾斜（组件结构 + 本站配色） ---------- */
+/* 海报圆角裁切放在 inner 上（inner 自带 overflow:hidden） */
+.atropos-inner { border-radius: var(--radius-sm); }
+/* 高光层：冷白 → 青/紫极光色，screen 混合贴合玻璃质感 */
+.atropos-highlight {
+  background-image: radial-gradient(circle at 50%,
+    rgba(0, 217, 255, .20), rgba(122, 92, 255, .10) 34%, transparent 62%);
+  mix-blend-mode: screen;
 }
-.film-dialog::backdrop {
-  background: rgba(5,6,10,.72);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+
+/* ---------- PhotoSwipe 灯箱（玻璃拟态，主类 pswp--portfolio） ---------- */
+.pswp--portfolio {
+  --pswp-bg: rgba(5, 6, 10, .94);
+  --pswp-icon-color: #eef4ff;
+  --pswp-icon-color-secondary: rgba(238, 244, 255, .55);
+  --pswp-preloader-color: rgba(0, 217, 255, .55);
+  --pswp-preloader-color-secondary: rgba(255, 255, 255, .55);
 }
-.film-dialog__inner {
-  position: relative;
-  background: linear-gradient(180deg, rgba(6,10,18,.92), rgba(5,6,10,.96));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
-  box-shadow: inset 0 0 24px rgba(255,255,255,.06), 0 30px 80px -20px rgba(0,0,0,.8);
-  max-height: 90vh; overflow-y: auto;
-}
-.dialog-close {
-  position: absolute; top: 1rem; right: 1rem; z-index: 5;
-  width: 2.5rem; height: 2.5rem; border-radius: 50%;
-  display:flex; align-items:center; justify-content:center;
-  border:1px solid var(--glass-border-hi); background: rgba(5,6,10,.55);
-  color: var(--ink); font-size: 1.1rem;
-  transition: transform .3s var(--ease-out), background .3s;
-}
-.dialog-close:hover { transform: rotate(90deg); background: rgba(255,61,129,.25); }
-.dialog-nav {
-  position: absolute; top: 50%; transform: translateY(-50%); z-index: 5;
-  width: 2.9rem; height: 2.9rem; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+/* 关闭按钮：圆形玻璃；左右箭头保持组件默认的大热区，仅换图标色 */
+.pswp--portfolio .pswp__button--close {
+  width: 2.75rem; height: 2.75rem;
+  align-self: center; margin-right: .85rem;
+  border-radius: 50%;
   border: 1px solid var(--glass-border-hi);
-  background: rgba(5,6,10,.55); color: var(--ink);
-  font-size: 1.25rem; line-height: 1;
-  transition: transform .3s var(--ease-out), background .3s, color .3s;
+  background: rgba(5, 6, 10, .55);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  opacity: 1;
+  transition: transform .25s var(--ease-out), background .25s, border-color .25s;
 }
-.dialog-nav:hover { transform: translateY(-50%) scale(1.08); background: rgba(255,61,129,.25); color: var(--ink-hi); }
-.dialog-nav--prev { left: 1rem; }
-.dialog-nav--next { right: 1rem; }
-.dialog-poster {
-  position: relative; align-self: start;
+.pswp--portfolio .pswp__button--close:hover,
+.pswp--portfolio .pswp__button--close:focus {
+  background: rgba(255, 61, 129, .25);
+  border-color: var(--aur-cyan);
+  transform: rotate(90deg);
 }
-.dialog-poster img { display:block; width:100%; height:auto; }
-.dialog-poster__scrim {
-  position:absolute; inset:0;
-  background: linear-gradient(to top right, rgba(5,6,10,.65), transparent 60%);
-}
+/* 计数器 / 缩放按钮已由 JS 关闭（counter:false / zoom:false），此处兜底 */
+.pswp--portfolio .pswp__counter,
+.pswp--portfolio .pswp__button--zoom { display: none; }
 
 /* ---------- 进场动画 ---------- */
 /* 滚动揭示（IO 驱动，once） */
@@ -442,5 +422,5 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 
 /* backdrop-filter 兜底：不支持时给实色底 */
 @supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
-  .glass, .nav, .film-dialog__inner, .social-btn { background: rgba(9,12,20,.9); }
+  .glass, .nav, .social-btn { background: rgba(9,12,20,.9); }
 }

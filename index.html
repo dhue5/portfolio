@@ -22,6 +22,9 @@
     "url": "https://dhue5.github.io/portfolio/"
   }
   </script>
+  <!-- 第三方组件样式（先加载，本站样式最后覆盖） -->
+  <link rel="stylesheet" href="./vendor/photoswipe/photoswipe.css">
+  <link rel="stylesheet" href="./vendor/atropos/atropos.min.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body id="top">
@@ -59,13 +62,18 @@
         <p class="section-desc">想了解一个人，去看 TA 的片子。</p>
       </div>
       <div class="about-media-wrap" data-reveal>
-        <div class="card glass about-media" data-tilt>
-          <div class="about-media__frame">
-            <img src="./assets/img/film-01.png" alt="王歌词——导演个人视觉肖像" width="1517" height="858"
-                 loading="lazy" decoding="async" class="about-media__img">
+        <div class="card glass about-media atropos" data-atropos>
+          <div class="atropos-scale">
+            <div class="atropos-rotate">
+              <div class="atropos-inner">
+                <div class="about-media__frame">
+                  <img src="./assets/img/film-01.png" alt="王歌词——导演个人视觉肖像" width="1517" height="858"
+                       loading="lazy" decoding="async" class="about-media__img">
+                </div>
+              </div>
+            </div>
           </div>
           <span class="sheen" aria-hidden="true"></span>
-          <span class="glare" aria-hidden="true"></span>
         </div>
       </div>
     </section>
@@ -91,15 +99,13 @@
 
   <footer class="footer">
     <p>© <span id="year">2026</span> 作品集 · 王歌词</p>
-    <p class="footer__tech">index.html + styles.css + app.js · 纯静态，离线可用</p>
+    <p class="footer__tech">index.html + styles.css + app.js · Atropos / PhotoSwipe / LazyLoad · 纯静态</p>
     <a class="footer__top" href="#top" aria-label="回到顶部">↑</a>
   </footer>
 
-  <!-- 电影详情模态 -->
-  <dialog id="film-dialog" class="film-dialog" aria-label="电影海报大图">
-    <div class="film-dialog__inner" id="dialog-inner"><!-- app.js 渲染详情 --></div>
-  </dialog>
-
-  <script src="./app.js"></script>
+  <!-- 第三方组件（defer 顺序执行，模块脚本随后运行） -->
+  <script src="./vendor/atropos/atropos.min.js" defer></script>
+  <script src="./vendor/lazyload/lazyload.iife.min.js" defer></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
